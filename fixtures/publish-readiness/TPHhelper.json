@@ -1,0 +1,31 @@
+{
+  "project": "TPHhelper",
+  "candidates": [
+    {
+      "id": "validated-core-fix",
+      "event": "修复核心路线计算错误",
+      "event_type": "bug_fix",
+      "story_score": 8,
+      "completion": "validated",
+      "explicit_result": true,
+      "evidence_level": "strong",
+      "public_status": "适合进入候选",
+      "reader_angle": "用户不再得到错误结果。",
+      "why_people_care": "前后结果有明确差异。",
+      "source": "git:core123"
+    },
+    {
+      "id": "unfinished-ui-experiment",
+      "event": "新的 UI 实验仍未完成",
+      "event_type": "experiment",
+      "story_score": 9,
+      "completion": "exploring",
+      "explicit_result": false,
+      "evidence_level": "strong",
+      "public_status": "适合进入候选",
+      "reader_angle": "实验可能改变操作方式。",
+      "why_people_care": "但当前结果仍可能变化。",
+      "source": "git:ui123"
+    }
+  ]
+}

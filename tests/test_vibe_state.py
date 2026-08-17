@@ -45,6 +45,18 @@ class VibeStateTests(unittest.TestCase):
         }]), encoding="utf-8")
         return path
 
+    def readiness_file(self, status="ready", completion="complete"):
+        path = self.root / "candidate.json"
+        path.write_text(json.dumps({
+            "event": "已验证的测试故事",
+            "publish_readiness": {
+                "status": status,
+                "completion": completion,
+                "reason": "测试用 readiness 原因",
+            },
+        }), encoding="utf-8")
+        return path
+
     def test_full_local_workflow(self):
         self.init()
         commit = self.run_cli(
@@ -81,6 +93,32 @@ class VibeStateTests(unittest.TestCase):
         self.init()
         second = self.init()
         self.assertEqual("already_initialized", second["result"])
+
+    def test_ready_candidate_can_create_social_commit(self):
+        self.init()
+        commit = self.run_cli(
+            "commit", "--title", "Ready story", "--events-file", str(self.safe_events()),
+            "--to-ref", "abc123", "--candidate-file", str(self.readiness_file()),
+        )
+        self.assertEqual("ready", commit["publish_readiness"]["status"])
+
+    def test_hold_candidate_requires_explicit_override(self):
+        self.init()
+        error = self.run_cli(
+            "commit", "--title", "Held story", "--events-file", str(self.safe_events()),
+            "--to-ref", "abc123", "--candidate-file", str(self.readiness_file("hold", "exploring")), expect=2,
+        )
+        self.assertIn("override-readiness", error["error"])
+
+    def test_skip_candidate_override_is_recorded(self):
+        self.init()
+        commit = self.run_cli(
+            "commit", "--title", "Skipped story", "--events-file", str(self.safe_events()),
+            "--to-ref", "abc123", "--candidate-file", str(self.readiness_file("skip", "unknown")),
+            "--override-readiness",
+        )
+        self.assertEqual("skip", commit["publish_readiness"]["status"])
+        self.assertEqual("skip", commit["publish_readiness_override"]["status"])
 
     def test_style_can_use_preset_or_abstract_profile(self):
         self.init()

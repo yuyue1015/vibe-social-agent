@@ -1,0 +1,31 @@
+{
+  "project": "vibe-social-agent",
+  "candidates": [
+    {
+      "id": "completed-skill-capability",
+      "event": "修复 Skill Contract 检查并通过验证",
+      "event_type": "bug_fix",
+      "story_score": 8,
+      "completion": "validated",
+      "explicit_result": true,
+      "evidence_level": "strong",
+      "public_status": "适合进入候选",
+      "reader_angle": "安装者可以更可靠地验证 Skill。",
+      "why_people_care": "完成能力已经有可验证结果。",
+      "source": "git:skill123"
+    },
+    {
+      "id": "future-concept",
+      "event": "未来的自动内容日历构想",
+      "event_type": "architecture_change",
+      "story_score": 10,
+      "completion": "exploring",
+      "explicit_result": false,
+      "evidence_level": "strong",
+      "public_status": "适合进入候选",
+      "reader_angle": "构想可能改变后续工作流。",
+      "why_people_care": "目前还不是已完成能力。",
+      "source": "summary:docs/roadmap.md"
+    }
+  ]
+}

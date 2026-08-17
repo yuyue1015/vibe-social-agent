@@ -52,6 +52,9 @@ RECENT_EVIDENCE = re.compile(
 )
 JOURNEY_STAGES = ("origin", "discovery", "prototype", "refinement", "validation", "release_growth")
 JOURNEY_STATE_NAME = "story-journey-state.md"
+PUBLISH_READINESS_STATUSES = ("ready", "hold", "skip")
+COMPLETION_LEVELS = ("complete", "validated", "exploring", "unknown")
+READINESS_ORDER = {"ready": 0, "hold": 1, "skip": 2}
 MAX_FILE_BYTES = 512 * 1024
 MAX_FILE_CHARS = 64_000
 MAX_DOCUMENT_CHARS = 400_000
@@ -206,7 +209,94 @@ def assess_journey(candidate: dict[str, Any], state: dict[str, Any]) -> dict[str
 
 def apply_journey(candidates: list[dict[str, Any]], output_root: Path) -> tuple[list[dict[str, Any]], dict[str, Any]]:
     state = write_journey_state(output_root)
-    return [assess_journey(candidate, state) for candidate in candidates], state
+    published = published_story_records(output_root)
+    assessed = [assess_journey(candidate, state) for candidate in candidates]
+    assessed = [assess_publish_readiness(candidate, state, published) for candidate in assessed]
+    assessed.sort(key=lambda item: (
+        READINESS_ORDER.get(item["publish_readiness"]["status"], 2),
+        -int(item.get("story_score", 0)),
+        str(item.get("source", "")),
+    ))
+    return assessed, state
+
+
+def _normalized_topic(value: Any) -> str:
+    return re.sub(r"[^\w\u4e00-\u9fff]+", "", str(value or "").lower())
+
+
+def completion_for(candidate: dict[str, Any]) -> str:
+    if candidate.get("evidence_level") != "strong":
+        return "unknown"
+    explicit = str(candidate.get("completion") or "").strip().lower()
+    if explicit in COMPLETION_LEVELS:
+        return explicit
+    event_type = str(candidate.get("event_type") or "").lower()
+    combined = " ".join(str(candidate.get(key, "")) for key in ("event", "technical_change", "evidence"))
+    if event_type in {"housekeeping", "dependency_upgrade"}:
+        return "unknown"
+    if event_type == "experiment":
+        return "validated" if candidate.get("explicit_result") else "exploring"
+    if event_type == "failed_attempt" and re.search(r"失败|结果|验证|failed|result|validated", combined, re.IGNORECASE):
+        return "validated"
+    if candidate.get("explicit_result"):
+        return "complete" if event_type in {"feature", "bug_fix", "ux_change", "milestone"} else "validated"
+    return "unknown"
+
+
+def assess_publish_readiness(
+    candidate: dict[str, Any],
+    state: dict[str, Any],
+    published: list[dict[str, Any]] | None = None,
+) -> dict[str, Any]:
+    """Assess release timing separately from reader-value ranking."""
+    published = published or []
+    event = str(candidate.get("event") or "")
+    combined = " ".join(str(candidate.get(key, "")) for key in ("event", "technical_change", "source", "evidence"))
+    completion = completion_for(candidate)
+    topic = _normalized_topic(event)
+    duplicate = bool(candidate.get("already_published")) or any(
+        topic and topic == _normalized_topic(item.get("topic"))
+        for item in published
+    )
+    public_status = candidate.get("public_status")
+    event_type = str(candidate.get("event_type") or "").lower()
+    score = int(candidate.get("story_score", 0))
+
+    if duplicate:
+        status, reason = "skip", "与已发布内容重复，不建议再次单独发布。"
+    elif public_status != "适合进入候选":
+        status, reason = "skip", "当前事实或公开许可不足，不能安全形成独立 Social Commit。"
+    elif completion == "unknown":
+        status, reason = "skip", "缺少足够事实证据，暂时无法判断是否已经形成可公开结果。"
+    elif event_type in {"housekeeping", "dependency_upgrade"} or re.search(
+        r"依赖升级|整理文件|目录整理|格式整理|dependency upgrade|housekeeping|format only",
+        combined,
+        re.IGNORECASE,
+    ):
+        status, reason = "skip", "属于内部整理或 housekeeping，缺少独立读者价值。"
+    elif score < 4 or (not candidate.get("reader_angle") and not candidate.get("why_people_care")):
+        status, reason = "skip", "故事价值或读者可理解的实际变化不足。"
+    elif completion == "exploring":
+        status, reason = "hold", "仍处于探索阶段，结果可能变化，适合作为后续记录。"
+    else:
+        current = state.get("current_stage")
+        journey_fit = candidate.get("journey_fit")
+        early_result = bool(re.search(r"1\.0\.0|首个可用|第一个可用|首次可用|first usable|first solution", combined, re.IGNORECASE))
+        if not current and completion == "complete" and early_result and event_type in {"feature", "bug_fix", "milestone", "ux_change"}:
+            status, reason = "ready", "已形成明确且验证过的阶段结果，适合作为系列起点。"
+        elif journey_fit == "suitable_now" or (not current and early_result):
+            status, reason = "ready", "已形成明确结果并通过验证，符合当前系列位置。"
+        else:
+            status, reason = "hold", "有故事价值，但当前系列位置或发布时机更适合作为后续内容。"
+
+    result = dict(candidate)
+    result["completion"] = completion
+    result["publish_readiness"] = {
+        "status": status,
+        "completion": completion,
+        "reason": reason,
+    }
+    return result
 
 
 def run_git(git_root: Path, scope: str | None, limit: int) -> tuple[int, str, str]:
@@ -756,6 +846,16 @@ def merge_and_rank(events: list[dict[str, Any]], max_candidates: int) -> list[di
 def render(source_root: Path, candidates: list[dict[str, Any]], error: str | None = None, journey_state: dict[str, Any] | None = None) -> str:
     generated = now()
     journey_state = journey_state or {}
+    if candidates and any("publish_readiness" not in item for item in candidates):
+        candidates = [
+            item if "publish_readiness" in item else assess_publish_readiness(item, journey_state, [])
+            for item in candidates
+        ]
+        candidates.sort(key=lambda item: (
+            READINESS_ORDER.get(item["publish_readiness"]["status"], 2),
+            -int(item.get("story_score", 0)),
+            str(item.get("source", "")),
+        ))
     lines = [
         "# Development story candidates",
         "",
@@ -773,33 +873,31 @@ def render(source_root: Path, candidates: list[dict[str, Any]], error: str | Non
     if not candidates:
         lines.extend(["", "No recent development trace produced a candidate."])
     else:
-        for index, item in enumerate(candidates, start=1):
-            lines.extend([
-                "",
-                f"## Candidate {index} — {item['event_type']}",
-                f"- event: {item['event']}",
-                f"- event_type: {item['event_type']}",
-                f"- source: {item['source']}",
-                f"- evidence_level: {item.get('evidence_level', 'strong')}",
-                f"- technical_change: {item['technical_change']}",
-                f"- reader_angle: {item['reader_angle']}",
-                f"- why_people_care: {item['why_people_care']}",
-                f"- story_score: {item['story_score']}/10",
-                f"- confidence: {item['confidence']}",
-                f"- publish_suggestion: {item['publish_suggestion']}",
-                f"- journey_stage: {item.get('journey_stage', journey_stage_for(item))}",
-                f"- journey_fit: {item.get('journey_fit', 'not_assessed')}",
-                f"- journey_reason: {item.get('journey_reason', '尚未进行公开节奏判断。')}",
-                f"- journey_suggestion: {item.get('journey_suggestion', '先运行 Story Journey 判断。')}",
-                f"- public_status: {item.get('public_status', '待人工确认')}",
-                f"- privacy_note: {item.get('privacy_note', '需要人工核实。')}",
-            ])
+        groups = (("ready", "推荐下一篇"), ("hold", "稍后更适合"), ("skip", "不建议单独发布"))
+        display_index = 1
+        for readiness, heading in groups:
+            group = [item for item in candidates if item.get("publish_readiness", {}).get("status") == readiness]
+            if not group:
+                continue
+            lines.extend(["", f"## {heading}", ""])
+            for item in group:
+                readiness_data = item["publish_readiness"]
+                lines.extend([
+                    f"[{display_index}] {item['event']}",
+                    f"    Story Value：{item['story_score']}/10",
+                    f"    状态：{readiness.upper()}",
+                    f"    原因：{readiness_data['reason']}",
+                ])
+                if item.get("source"):
+                    lines.append(f"    证据来源：{item['source']}")
+                display_index += 1
     lines.extend(["", "## 下一步", ""])
     if candidates:
         lines.extend([
-            "[1] 选择一个候选，进入人工核实与 Story Ranking",
-            "[2] 补充当前开发摘要并重新扫描",
-            "[3] 暂不处理",
+            "[1] 采用推荐选题",
+            "[2] 查看其他 READY / HOLD 候选",
+            "[3] 重新指定时间范围",
+            "[4] 暂不处理",
         ])
     elif error and "当前能验证功能存在" in error:
         lines.extend([

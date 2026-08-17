@@ -37,6 +37,8 @@ PERFORMANCE_FILES = (
 )
 EVENT_REQUIRED = {"type", "summary", "problem", "change", "user_value", "public_safe"}
 EVENT_ALLOWED = EVENT_REQUIRED | {"evidence"}
+PUBLISH_READINESS_STATUSES = {"ready", "hold", "skip"}
+COMPLETION_LEVELS = {"complete", "validated", "exploring", "unknown"}
 FORBIDDEN_KEYS = re.compile(r"(?:token|secret|password|passwd|cookie|api[_-]?key|credential|private[_-]?key)", re.I)
 FORBIDDEN_TEXT = [
     re.compile(r"-----BEGIN [A-Z ]*PRIVATE KEY-----"),
@@ -693,6 +695,28 @@ def cmd_commit(args: argparse.Namespace) -> dict[str, Any]:
     root = state_root(args.root)
     _, state = require_initialized(root)
     events = validate_events(read_json(Path(args.events_file)))
+    readiness = None
+    readiness_override = None
+    if args.candidate_file:
+        candidate = read_json(Path(args.candidate_file))
+        if not isinstance(candidate, dict):
+            raise StateError("Candidate file must contain one ranked candidate object")
+        readiness = candidate.get("publish_readiness")
+        if not isinstance(readiness, dict):
+            raise StateError("Candidate is missing publish_readiness")
+        status = readiness.get("status")
+        completion = readiness.get("completion")
+        reason = readiness.get("reason")
+        if status not in PUBLISH_READINESS_STATUSES or completion not in COMPLETION_LEVELS or not isinstance(reason, str) or not reason.strip():
+            raise StateError("Invalid publish_readiness contract")
+        if status != "ready":
+            if not args.override_readiness:
+                raise StateError(f"Publish Readiness is {status}; explicit --override-readiness is required")
+            readiness_override = {
+                "status": status,
+                "reason": reason,
+                "requested_at": now(),
+            }
     number = state["last_social_commit_number"] + 1
     commit_id = f"sc-{number:04d}"
     enriched = [{"id": f"{commit_id}-evt-{i:02d}", **event} for i, event in enumerate(events, start=1)]
@@ -708,6 +732,10 @@ def cmd_commit(args: argparse.Namespace) -> dict[str, Any]:
         "to_ref": args.to_ref,
         "events": enriched,
     }
+    if readiness is not None:
+        record["publish_readiness"] = dict(readiness)
+    if readiness_override is not None:
+        record["publish_readiness_override"] = readiness_override
     inspect_public(record)
     atomic_json(safe_join(root / "social-commits", f"{commit_id}.json"), record)
     state["last_social_commit_number"] = number
@@ -773,6 +801,7 @@ def cmd_create_pr(args: argparse.Namespace) -> dict[str, Any]:
         "revision_of": None,
         "source_approved_commit_id": commit.get("source_approved_commit_id"),
         "social_commit_id": args.commit,
+        "publish_readiness": commit.get("publish_readiness"),
         "title": args.title,
         "direction": args.direction,
         "body": body,
@@ -846,6 +875,7 @@ def cmd_create_revision(args: argparse.Namespace) -> dict[str, Any]:
         "revision_of": source_pr["id"],
         "source_approved_commit_id": source_commit_id,
         "social_commit_id": commit_id,
+        "publish_readiness": source_commit.get("publish_readiness"),
         "title": source_pr["title"],
         "direction": source_pr["direction"],
         "body": source_pr["body"],
@@ -1028,6 +1058,8 @@ def build_parser() -> argparse.ArgumentParser:
     commit.add_argument("--events-file", required=True)
     commit.add_argument("--from-ref", default="START")
     commit.add_argument("--to-ref", required=True)
+    commit.add_argument("--candidate-file")
+    commit.add_argument("--override-readiness", action="store_true")
     commit.set_defaults(run=cmd_commit)
     create_pr = sub.add_parser("create-pr")
     create_pr.add_argument("--commit", required=True)

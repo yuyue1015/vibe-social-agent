@@ -22,6 +22,18 @@ Required: `type`, `summary`, `problem`, `change`, `user_value`, `public_safe`. `
 
 A Social Commit includes `id`, `status`, `title`, `created_at`, `from_ref`, `to_ref`, and immutable events. A Social PR includes `id`, `status`, `social_commit_id`, `title`, `direction`, `body`, timestamps, and revision number.
 
+Ranked story candidates may also include an independent `publish_readiness` object:
+
+```json
+{
+  "status": "ready",
+  "completion": "complete",
+  "reason": "已形成明确结果并符合当前系列位置。"
+}
+```
+
+`story_score` measures reader-value potential; `publish_readiness` measures current publishing timing. A high score does not imply `ready`. A Social Commit created from a candidate stores this object. `hold` and `skip` require an explicit user override, recorded as `publish_readiness_override`.
+
 When a Social PR is approved, its final body is copied to the related Social Commit as `final_text`, with `approved_at`. The PR also retains `first_draft`, `revisions`, optional `series`/`series_number`, and a `learning` summary. Approval writes project-local memory under `.vibesocial/` but never publishes. `learning: []` is valid; `learning_status` may be `saved`, `no_new_preference`, or `failed`, and a learning failure must not undo `APPROVED`.
 
 Learning input is a temporary JSON object or array with `rule_key`, `scope` (`GLOBAL_STYLE`, `SERIES_STYLE`, or `POST_SPECIFIC`), `inferred_rule`, `confidence`, and optional safe summaries for `original_text`, `original_sentence`, `user_feedback`, `final_text`, `replacement`, `target`, `tags`, `series`, and `series_number`. The state script derives `count` and `status` (`OBSERVED`, `REPEATED`, `CORE`) and appends the result to `feedback-log.md`.

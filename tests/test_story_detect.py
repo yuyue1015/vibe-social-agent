@@ -56,7 +56,7 @@ M\ttests/test_routing.py
         candidate = MODULE.candidate_for(commits[0])
         self.assertEqual("bug_fix", candidate["event_type"])
         self.assertIn("用户", candidate["why_people_care"])
-        self.assertIn("story_score", MODULE.render(Path("TPHhelper"), [candidate]))
+        self.assertIn("Story Value", MODULE.render(Path("TPHhelper"), [candidate]))
         self.assertNotIn("微博正文", MODULE.render(Path("TPHhelper"), [candidate]))
 
     def test_sensitive_and_unpublished_paths_are_not_recommended(self):
@@ -104,7 +104,7 @@ M\ttests/test_routing.py
         self.assertTrue(any(item["source"] == "summary:reports/test-report.md" for item in events))
         self.assertTrue(all(item["evidence_level"] == "strong" for item in events))
         self.assertNotIn("Old published story", rendered)
-        self.assertIn("[1] 选择一个候选", rendered)
+        self.assertIn("[1] 采用推荐选题", rendered)
         self.assertIn("summary:reports/test-report.md", rendered)
 
     def test_no_commit_readme_and_source_do_not_claim_recent_event(self):

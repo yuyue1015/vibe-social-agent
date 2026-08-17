@@ -1,0 +1,44 @@
+{
+  "project": "tph-roomtemplate",
+  "candidates": [
+    {
+      "id": "first-usable-1-0-0",
+      "event": "首个可用版本 1.0.0",
+      "event_type": "feature",
+      "story_score": 8,
+      "completion": "complete",
+      "explicit_result": true,
+      "evidence_level": "strong",
+      "public_status": "适合进入候选",
+      "reader_angle": "用户可以完成一次完整导入。",
+      "why_people_care": "这是项目第一次形成可用闭环。",
+      "source": "summary:docs/release-notes.md"
+    },
+    {
+      "id": "three-games-2-0-0",
+      "event": "扩展到三款游戏 2.0.0",
+      "event_type": "feature",
+      "story_score": 9,
+      "completion": "complete",
+      "explicit_result": true,
+      "evidence_level": "strong",
+      "public_status": "适合进入候选",
+      "reader_angle": "同一套工具可以覆盖更多项目。",
+      "why_people_care": "扩展体现了产品成长。",
+      "source": "summary:docs/release-notes.md"
+    },
+    {
+      "id": "unity-resource-experiment",
+      "event": "Unity 资源属性解析实验",
+      "event_type": "experiment",
+      "story_score": 9,
+      "completion": "exploring",
+      "explicit_result": false,
+      "evidence_level": "strong",
+      "public_status": "适合进入候选",
+      "reader_angle": "实验可以解释技术取舍。",
+      "why_people_care": "探索结果可能影响后续能力。",
+      "source": "summary:docs/experiments.md"
+    }
+  ]
+}

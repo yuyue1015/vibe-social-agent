@@ -4,6 +4,8 @@
 
 `DETECTED → SOCIAL_COMMIT → SOCIAL_PR → APPROVED → PUBLISHED`
 
+Before `SOCIAL_COMMIT`, ranked candidates receive a separate Publish Readiness result: `ready`, `hold`, or `skip`. Only `ready` enters the normal Social Commit path; `hold` and `skip` require an explicit user override. This gate does not change the state machine.
+
 本地编辑流程在 `APPROVED` 停止；`PUBLISHED` 是用户选择内容分发并成功确认后的可选结果。微博分发由独立的 `weibo-publish` Skill 负责。
 
 `DRAFT` 是用户可见的草稿标签，`PULL` 是提交本轮修改的用户动作；两者都不是额外的持久化状态。修改已批准内容时，先创建新的 Social Commit 和 Social PR 版本：
