@@ -1,0 +1,4 @@
+interface:
+  display_name: "Weibo Publish"
+  short_description: "Safely publish approved VibeSocial drafts to Weibo"
+  default_prompt: "Use $weibo-publish only to preview and publish an APPROVED VibeSocial draft to Weibo after explicit authorization."

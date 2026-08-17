@@ -1,0 +1,62 @@
+[
+  {
+    "id": "visible-bug-fix",
+    "event_type": "bug_fix",
+    "event": "API cache bug",
+    "technical_change": "The selected record no longer returns a stale cache result.",
+    "reader_angle": "The reader can see which result changed.",
+    "why_people_care": "A concrete incorrect result is corrected.",
+    "user_visible": true,
+    "explicit_result": true,
+    "areas": ["实现", "测试"],
+    "source": "fixture:bug"
+  },
+  {
+    "id": "formula-correction",
+    "event_type": "bug_fix",
+    "event": "Invoice formula",
+    "technical_change": "The formula now matches the documented rule.",
+    "reader_angle": "The before and after values are visible.",
+    "why_people_care": "The documented formula now matches the validation result.",
+    "user_visible": true,
+    "explicit_result": true,
+    "areas": ["测试"],
+    "source": "fixture:formula"
+  },
+  {
+    "id": "milestone-validated",
+    "event_type": "milestone",
+    "event": "First importer run",
+    "technical_change": "The importer output was validated.",
+    "reader_angle": "A first working result is easy to understand.",
+    "why_people_care": "The tool has a concrete validated starting point.",
+    "user_visible": false,
+    "explicit_result": true,
+    "areas": [],
+    "source": "fixture:milestone"
+  },
+  {
+    "id": "architecture-refactor",
+    "event_type": "architecture_change",
+    "event": "Pipeline boundaries",
+    "technical_change": "Parser, cache, and export modules were separated.",
+    "reader_angle": "The implementation boundary is concrete.",
+    "why_people_care": "The change explains a technical tradeoff without claiming a user result.",
+    "user_visible": false,
+    "explicit_result": false,
+    "areas": ["实现"],
+    "source": "fixture:architecture"
+  },
+  {
+    "id": "dependency-housekeeping",
+    "event_type": "architecture_change",
+    "event": "Dependency refresh",
+    "technical_change": "Development dependencies and the lockfile were refreshed.",
+    "reader_angle": "No product behavior changed.",
+    "why_people_care": "Routine maintenance has no validated reader-facing effect.",
+    "user_visible": false,
+    "explicit_result": false,
+    "areas": ["实现"],
+    "source": "fixture:housekeeping"
+  }
+]

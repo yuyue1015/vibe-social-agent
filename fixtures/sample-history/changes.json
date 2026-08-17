@@ -1,0 +1,30 @@
+[
+  {
+    "type": "feature",
+    "summary": "Added illness data loading",
+    "problem": "The simulator could not evaluate real illness configurations",
+    "change": "Introduced a validated illness data source",
+    "user_value": "Players can test recognizable scenarios",
+    "evidence": ["Fixture validation passes"],
+    "public_safe": true
+  },
+  {
+    "type": "rule_correction",
+    "summary": "Corrected an optimistic diagnosis model",
+    "problem": "Entry-level staff were treated as more capable than intended",
+    "change": "Recalibrated the public-facing diagnosis rules",
+    "user_value": "Recommendations no longer systematically overestimate results",
+    "evidence": ["Focused calculation tests pass"],
+    "public_safe": true
+  },
+  {
+    "type": "ux_improvement",
+    "summary": "Redesigned the mobile result card",
+    "problem": "A result that fit the screen was still difficult to share",
+    "change": "Separated reading layout from the compact sharing layout",
+    "user_value": "Mobile users can understand and share results more easily",
+    "evidence": ["Mobile presentation cases pass"],
+    "public_safe": true
+  }
+]
+

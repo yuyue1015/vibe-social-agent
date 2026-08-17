@@ -1,0 +1,26 @@
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+.coverage
+htmlcov/
+.venv/
+
+# Local VibeSocial state and temporary files
+.vibesocial/
+.tmp-vibesocial-*
+
+# Local secrets and credentials
+.env
+.env.*
+*.token
+
+# Local logs
+logs/
+*.log
+*.tmp
+
+# Eval output is local-only; keep only its directory contract if desired.
+evals/results/*
+!evals/results/.gitignore

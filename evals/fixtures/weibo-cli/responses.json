@@ -1,0 +1,14 @@
+{
+  "commands": [
+    "  statuses  update  Create a status",
+    "  statuses  upload_pic  Upload a picture",
+    "  statuses  upload_url_text  Create a status with pictures",
+    "  statuses  show_batch/biz  Read statuses"
+  ],
+  "schemas": {
+    "statuses update": ["status", "mblog_statement", "is_longtext"],
+    "statuses upload_pic": ["pic"],
+    "statuses upload_url_text": ["pic_id", "status", "mblog_statement", "is_longtext"],
+    "statuses show_batch/biz": ["ids", "isGetLongText"]
+  }
+}

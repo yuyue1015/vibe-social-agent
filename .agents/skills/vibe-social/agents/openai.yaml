@@ -1,0 +1,4 @@
+interface:
+  display_name: "VibeSocial"
+  short_description: "Privacy-review progress into human-approved drafts"
+  default_prompt: "Use $vibe-social only to scan VibeSocial development progress or create, revise, approve, and hand off a VibeSocial draft."

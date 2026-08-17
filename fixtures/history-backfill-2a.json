@@ -1,0 +1,41 @@
+{
+  "series": "双点医院诊疗模拟器",
+  "fixed_title": "【我给《双点医院》做了一个诊疗模拟器｜开发日志XX】",
+  "fixed_tags": ["#微博VibeLab#", "#VibeCoding#", "#双点医院#"],
+  "current_number": "08",
+  "approved_numbers": ["01", "02", "03", "04", "05", "06", "07"],
+  "draft": "08",
+  "plan_complete": false,
+  "approved": [
+    {"number": "01", "tags": ["series-title", "player-perspective", "concrete-data"], "final_text": "【我给《双点医院》做了一个诊疗模拟器｜开发日志01】\n几年前玩《双点医院》时，我整理过一份疾病和诊断房间的数据表，方便查一个病该去哪里检查。\n最近重新翻出这份表，我想把“查表”再往前做一步：能不能让工具直接算出病人的诊断路径？\n于是我重新整理疾病、房间和诊断数据，开始把以前靠自己判断的游戏规则变成可以计算的东西。\n诊疗模拟器就是从这里开始的。\n#微博VibeLab# #VibeCoding# #双点医院#"},
+    {"number": "02", "tags": ["series-title", "concrete-data", "data-cleanup"], "final_text": "【我给《双点医院》做了一个诊疗模拟器｜开发日志02】\n这些年我陆续存了很多《双点医院》的资料。\n疾病难度、基础诊断率、各诊断室数值，机器、物品、员工技能的加成也都有。\n平时玩的时候知道去哪里查，够用了。\n现在要把它们放进同一个工具，麻烦就来了：不同资料的口径、字段、算法全得重新对上。\n我就从这些零散的资料开始，一项项重新整理。\n#微博VibeLab# #VibeCoding# #双点医院#"},
+    {"number": "03", "tags": ["series-title", "data-model", "player-perspective"], "final_text": "【我给《双点医院》做了一个诊疗模拟器｜开发日志03】\n开始正式整理以后，我先把资料按对象拆开。\n疾病一类，诊断室一类，员工一类，技能和各种加成再单独放。\n以前看攻略的时候，这些信息混在一起完全没问题，人脑会自己补关系。\n程序不行。\n哪个数属于疾病，哪个数属于房间，哪些加成作用在员工身上，都得写得清清楚楚。\n这一步做了挺久，项目最早的数据结构也就是这么一点点搭起来的。\n#微博VibeLab# #VibeCoding# #双点医院#"},
+    {"number": "04", "tags": ["series-title", "concrete-number", "game-object"], "final_text": "【我给《双点医院》做了一个诊疗模拟器｜开发日志04】\n真正往里填数据以后，规模一下子出来了。\n279种疾病、43个房间、8个DLC。每个病都有自己的诊断难度，不同诊断室还有各自的诊断率；放射、DNA、精神科、病房这些房间，机器升级又分0%、25%、50%。\n员工等级、技能、诊断物品还会继续往上叠。\n以前这些数分开看都不吓人，放进同一套计算里，任何一个字段放错位置，最后结果都会跟着跑偏。\n#微博VibeLab# #VibeCoding# #双点医院#"},
+    {"number": "05", "tags": ["series-title", "planning", "player-value"], "final_text": "【我给《双点医院》做了一个诊疗模拟器｜开发日志05】\n做到这里，我也给这个工具定了个比较简单的目标。\n第一步，先回答“这个病该怎么查、怎么诊断”。\n第二步，告诉我“按现在这家医院的配置，病人实际会怎么走，最后能不能顺利确诊”。\n再往后，我希望它还能帮我看看：\n哪些房间其实没必要开，哪些组合更省人、省时间。\n说白了，就是从“帮我查”，慢慢做到“帮我算”，最后再试试“帮我想”。\n#微博VibeLab# #VibeCoding# #双点医院#"},
+    {"number": "06", "tags": ["series-title", "rule-audit", "formula", "ai-assisted"], "final_text": "【我给《双点医院》做了一个诊疗模拟器｜开发日志06】\n代码这部分我基本一直在和 AI 一起写，速度确实快很多。\n但游戏规则不能交给它猜。\n比如“注射技能”到底是进入注射室的资格，还是只提供 +20% 治疗加成？员工升级后基础诊断能力怎么涨？这些只要理解错一次，后面的计算都能跑得很漂亮，然后全部算错。\n所以我后来给自己定了规矩：规则先查资料、确认口径，再让 Codex 写进计算系统。\nAI负责实现，我负责别让它一本正经地胡算。\n#微博VibeLab# #VibeCoding# #双点医院#"},
+    {"number": "07", "tags": ["series-title", "golden-case", "testing", "audit"], "final_text": "【我给《双点医院》做了一个诊疗模拟器｜开发日志07】\n第一个能真正跑起来的版本，其实很朴素。\n选一个医院，再选一个疾病，系统把这家医院当前能用的诊断方式带进去，算它能不能过我设定的诊断阈值。\n我拿 Golden Case 一遍遍对结果，反复检查疾病数据、房间数值、员工和加成有没有算偏。\n那时候我最在意的就是一件事：\n程序算出来的结果，得和我手工理解的一样。\n能稳定对上，后面的模拟才有基础。\n#微博VibeLab# #VibeCoding# #双点医院#"}
+  ],
+  "feedback": [
+    {"social_commit_id": "BACKFILL-CORE-DENSITY", "rule_key": "density.150-200-information", "scope": "GLOBAL_STYLE", "inferred_rule": "单篇约150–200字，字少时优先保留信息密度。", "user_feedback": "约150–200字，信息密度优先。", "status": "CORE", "count": 1, "confidence": "high"},
+    {"social_commit_id": "BACKFILL-CORE-SERIES-TITLE", "rule_key": "series.fixed-title", "scope": "SERIES_STYLE", "inferred_rule": "每篇第一行使用固定系列标题。", "user_feedback": "系列标题固定。", "status": "CORE", "count": 1, "confidence": "high"},
+    {"social_commit_id": "BACKFILL-CORE-SENTENCE-JOB", "rule_key": "density.every-sentence", "scope": "GLOBAL_STYLE", "inferred_rule": "每句话都必须有信息作用。", "user_feedback": "每句话必须有作用。", "status": "CORE", "count": 1, "confidence": "high"},
+    {"social_commit_id": "BACKFILL-CORE-NEXT-PLAN", "rule_key": "series.next-reads-plan", "scope": "SERIES_STYLE", "inferred_rule": "每次生成“下一篇”前先读取完整系列规划，不能根据上一篇自由推演。", "user_feedback": "每次“下一篇”先看整体规划。", "status": "CORE", "count": 1, "confidence": "high"},
+    {"social_commit_id": "BACKFILL-CORE-CONCRETE", "rule_key": "content.concrete-material", "scope": "GLOBAL_STYLE", "inferred_rule": "优先写真实疾病、房间、数字、公式、Bug、审计、框架和测试等具体材料。", "user_feedback": "多写真实疾病、房间、公式、Bug、审计、框架、测试等具体内容。", "status": "CORE", "count": 1, "confidence": "high"},
+    {"social_commit_id": "BACKFILL-CORE-AUDIENCE", "rule_key": "audience.ordinary-reader", "scope": "GLOBAL_STYLE", "inferred_rule": "面向普通人和玩家，把开发内容翻译成普通读者能理解的目标和事件。", "user_feedback": "面向普通人和玩家，不写开发命令。", "status": "CORE", "count": 1, "confidence": "high"},
+    {"social_commit_id": "BACKFILL-CORE-SUBJECT", "rule_key": "grammar.explicit-subject", "scope": "GLOBAL_STYLE", "inferred_rule": "动作句尽量有明确主语。", "user_feedback": "动作句尽量有明确主语。", "status": "CORE", "count": 1, "confidence": "high"},
+    {"social_commit_id": "BACKFILL-ANTI-NOT-BUT", "rule_key": "anti_ai.not-but", "scope": "GLOBAL_STYLE", "inferred_rule": "避免“不是A而是B”和“不只是A更是B”的模板转折。", "user_feedback": "以后不要使用“不是A而是B”“不只是A更是B”。", "status": "CORE", "count": 1, "confidence": "high", "target": "anti-ai-patterns"},
+    {"social_commit_id": "BACKFILL-ANTI-HOOKS", "rule_key": "anti_ai.generic-hooks", "scope": "GLOBAL_STYLE", "inferred_rule": "避免“这次才发现”“原来”等虚构发现感，也不强行制造反常识提问。", "user_feedback": "不根据真实经历虚构发现、意识到或没想到；不强行反常识提问。", "status": "CORE", "count": 1, "confidence": "high", "target": "anti-ai-patterns"},
+    {"social_commit_id": "BACKFILL-ANTI-TURNS", "rule_key": "anti_ai.forced-structure", "scope": "GLOBAL_STYLE", "inferred_rule": "不要求每篇强行转折或用抽象总结收尾。", "user_feedback": "不要每篇强行转折或抽象收尾。", "status": "CORE", "count": 1, "confidence": "high", "target": "anti-ai-patterns"},
+    {"social_commit_id": "BACKFILL-ANTI-REPORT", "rule_key": "anti_ai.report-words", "scope": "GLOBAL_STYLE", "inferred_rule": "避免“理顺、推进、打通、完善”等汇报词。", "user_feedback": "不要使用“理顺、推进、打通、完善”等汇报词。", "status": "CORE", "count": 1, "confidence": "high", "target": "anti-ai-patterns"}
+  ],
+  "plan": {
+    "01": {"topic": "从疾病和诊断房间资料表开始，提出诊断路径工具", "status": "approved"},
+    "02": {"topic": "整理零散资料，统一疾病、房间、机器和技能的口径", "status": "approved"},
+    "03": {"topic": "按疾病、诊断室、员工、技能和加成拆分数据对象", "status": "approved"},
+    "04": {"topic": "279种疾病、43个房间、8个DLC带来的数据规模和字段风险", "status": "approved"},
+    "05": {"topic": "从查疾病路径到计算医院配置，再到辅助规划的工具目标", "status": "approved"},
+    "06": {"topic": "核对注射技能和员工诊断能力规则，避免AI把规则算错", "status": "approved"},
+    "07": {"topic": "第一个可运行版本，用Golden Case核对诊断阈值", "status": "approved"},
+    "08": {"topic": "员工能力公式第一次大返工：拆开基础值、等级成长和技能加成", "status": "draft"}
+  }
+}

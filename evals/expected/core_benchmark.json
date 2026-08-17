@@ -1,0 +1,23 @@
+{
+  "version": 1,
+  "ranking": {
+    "expected_top_ids": [
+      "visible-bug-fix",
+      "formula-correction",
+      "milestone-validated",
+      "architecture-refactor",
+      "dependency-housekeeping"
+    ],
+    "reader_value_threshold": 7
+  },
+  "forward_test": {
+    "status": "READY_FOR_FORWARD_TEST",
+    "case_ids": [
+      "fresh-new-project",
+      "fresh-existing-project",
+      "fresh-non-game-project",
+      "fresh-weibo-preview",
+      "fresh-publish-recovery"
+    ]
+  }
+}

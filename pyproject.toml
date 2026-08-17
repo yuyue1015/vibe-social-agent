@@ -1,0 +1,27 @@
+[project]
+name = "vibe-social-agent-quality"
+version = "0.1.0b1"
+description = "Development quality configuration for the VibeSocial Codex Skills"
+requires-python = ">=3.11"
+
+[tool.ruff]
+target-version = "py311"
+line-length = 120
+extend-exclude = [".vibesocial", "__pycache__"]
+
+[tool.ruff.lint]
+select = ["E4", "E7", "E9", "F"]
+ignore = ["E501"]
+
+[tool.coverage.run]
+branch = true
+source = [".agents/skills", "tests"]
+
+[tool.coverage.report]
+show_missing = true
+skip_covered = true
+
+[tool.vibe_social]
+test_command = "python -m unittest discover -s tests -p 'test*.py'"
+lint_command = "ruff check .agents/skills tests evals scripts"
+release_check_command = "python scripts/release_check.py --json"

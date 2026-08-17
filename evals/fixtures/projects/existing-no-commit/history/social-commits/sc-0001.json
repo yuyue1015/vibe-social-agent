@@ -1,0 +1,9 @@
+{
+  "id": "sc-0001",
+  "status": "PUBLISHED",
+  "title": "Old published story",
+  "publish": {
+    "platform": "weibo",
+    "published_at": "2025-01-01"
+  }
+}

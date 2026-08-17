@@ -1,0 +1,142 @@
+[
+  {
+    "case_id": "feature-cli-export",
+    "category": "feature",
+    "raw_artifact": "feat: add CSV export for selected records; export keeps the selected fields and returns a download result",
+    "detect": {
+      "subject": "feat: add CSV export for selected records",
+      "paths": ["src/export.py", "tests/test_export.py"]
+    },
+    "expected_event_type": "feature",
+    "expected_priority": "high",
+    "required_facts": ["CSV", "selected"],
+    "forbidden_claims": ["30%", "用户反馈更好", "玩家"],
+    "expected_behavior": "retain concrete export behavior and do not invent adoption results"
+  },
+  {
+    "case_id": "bug-fix-api-cache",
+    "category": "bug_fix",
+    "raw_artifact": "fix: correct stale API cache keys; requests now return the selected record instead of an older cached result",
+    "detect": {
+      "subject": "fix: correct stale API cache keys",
+      "paths": ["src/cache.py", "tests/test_cache.py"]
+    },
+    "expected_event_type": "bug_fix",
+    "expected_priority": "high",
+    "required_facts": ["cache", "selected record"],
+    "forbidden_claims": ["all users", "100%", "更快", "玩家"],
+    "expected_behavior": "explain the corrected result without claiming measured performance"
+  },
+  {
+    "case_id": "failed-parser-attempt",
+    "category": "failed_attempt",
+    "raw_artifact": "failed: the streaming parser attempt dropped malformed rows, so the implementation returned to a bounded batch path",
+    "detect": {
+      "subject": "failed: streaming parser dropped malformed rows",
+      "paths": ["src/parser.py", "tests/test_parser.py"]
+    },
+    "expected_event_type": "failed_attempt",
+    "expected_priority": "high",
+    "required_facts": ["streaming parser", "malformed rows", "batch"],
+    "forbidden_claims": ["用户更满意", "终于", "玩家"],
+    "expected_behavior": "preserve the failed approach and the reason for changing direction"
+  },
+  {
+    "case_id": "architecture-module-boundary",
+    "category": "architecture_change",
+    "raw_artifact": "refactor: split the request pipeline into parser, cache, and export modules; no user-visible result has been measured yet",
+    "detect": {
+      "subject": "refactor: split request pipeline into parser, cache, and export modules",
+      "paths": ["src/parser.py", "src/cache.py", "src/export.py"]
+    },
+    "expected_event_type": "architecture_change",
+    "expected_priority": "medium",
+    "required_facts": ["parser", "cache", "export"],
+    "forbidden_claims": ["更稳定", "更快", "用户反馈更好", "玩家"],
+    "expected_behavior": "describe the boundary change and abstain from unverified outcomes"
+  },
+  {
+    "case_id": "housekeeping-dependency-upgrade",
+    "category": "housekeeping",
+    "raw_artifact": "chore: upgrade development dependencies and refresh lockfile; no product behavior changed",
+    "detect": {
+      "subject": "chore: upgrade development dependencies and refresh lockfile",
+      "paths": ["pyproject.toml", "uv.lock"]
+    },
+    "expected_event_type": "architecture_change",
+    "expected_priority": "low",
+    "required_facts": ["dependencies", "lockfile"],
+    "forbidden_claims": ["更安全", "更快", "用户反馈更好", "玩家"],
+    "expected_behavior": "suppress routine maintenance unless a concrete result is supplied"
+  },
+  {
+    "case_id": "formula-correction",
+    "category": "formula_correction",
+    "raw_artifact": "fix: correct the invoice tax formula from 18 attempts to 11 attempts in the validation fixture; the formula now matches the documented rule",
+    "detect": {
+      "subject": "fix: correct invoice tax formula from 18 attempts to 11 attempts",
+      "paths": ["src/billing/formula.py", "tests/test_formula.py"]
+    },
+    "expected_event_type": "bug_fix",
+    "expected_priority": "high",
+    "required_facts": ["18", "11", "tax formula"],
+    "forbidden_claims": ["提升 30%", "客户满意", "玩家"],
+    "expected_behavior": "retain the before/after numbers and documented validation result"
+  },
+  {
+    "case_id": "ux-keyboard-navigation",
+    "category": "ux_change",
+    "raw_artifact": "ux: add keyboard navigation to the settings screen; the focused button now follows the documented tab order",
+    "detect": {
+      "subject": "ux: add keyboard navigation to settings screen",
+      "paths": ["frontend/settings.tsx", "tests/settings.test.tsx"]
+    },
+    "expected_event_type": "ux_change",
+    "expected_priority": "high",
+    "required_facts": ["keyboard navigation", "settings screen", "tab order"],
+    "forbidden_claims": ["所有用户", "更方便", "玩家"],
+    "expected_behavior": "describe the changed action and avoid broad usability claims"
+  },
+  {
+    "case_id": "milestone-first-run",
+    "category": "milestone",
+    "raw_artifact": "first run: the command-line importer completed its first validated run and returned 12 records",
+    "detect": {
+      "subject": "first run: command-line importer returned 12 records",
+      "paths": ["src/importer.py", "tests/test_importer.py"]
+    },
+    "expected_event_type": "milestone",
+    "expected_priority": "high",
+    "required_facts": ["first", "12 records"],
+    "forbidden_claims": ["生产稳定", "用户反馈更好", "玩家"],
+    "expected_behavior": "state the first validated result without generalizing beyond the fixture"
+  },
+  {
+    "case_id": "non-game-api-project",
+    "category": "non-game-project",
+    "raw_artifact": "feat: add a batch API endpoint for data export; the response includes the selected rows and preserves the request filter",
+    "detect": {
+      "subject": "feat: add batch API endpoint for data export",
+      "paths": ["src/api/export.py", "tests/test_api_export.py"]
+    },
+    "expected_event_type": "feature",
+    "expected_priority": "high",
+    "required_facts": ["batch API endpoint", "selected rows", "request filter"],
+    "forbidden_claims": ["玩家", "医院", "病人", "房间", "疾病", "诊断"],
+    "expected_behavior": "generalize to a non-game project without importing a default domain"
+  },
+  {
+    "case_id": "ambiguous-internal-update",
+    "category": "ambiguous-change",
+    "raw_artifact": "update: adjust internal modules and configuration files",
+    "detect": {
+      "subject": "update: adjust internal modules and configuration files",
+      "paths": ["src/internal.py", "config/settings.toml"]
+    },
+    "expected_event_type": "architecture_change",
+    "expected_priority": "low",
+    "required_facts": ["internal modules", "configuration"],
+    "forbidden_claims": ["用户受益", "更稳定", "更快", "玩家"],
+    "expected_behavior": "abstain or request evidence of a reader-visible change"
+  }
+]
