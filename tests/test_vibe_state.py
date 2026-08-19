@@ -32,6 +32,19 @@ class VibeStateTests(unittest.TestCase):
     def init(self):
         return self.run_cli("init", "--project-name", "Fixture", "--style", "casual-weibo")
 
+    def create_draft_pr(self, body_text="第一句原稿。第二句保留。", title_text="原始标题"):
+        self.init()
+        commit = self.run_cli(
+            "commit", "--title", "Draft editing fixture",
+            "--events-file", str(self.safe_events()), "--to-ref", "abc123",
+        )
+        body = self.root / "draft.md"
+        body.write_text(body_text, encoding="utf-8")
+        return self.run_cli(
+            "create-pr", "--commit", commit["id"], "--title", title_text,
+            "--direction", "Draft editing", "--body-file", str(body),
+        )
+
     def safe_events(self):
         path = self.root / "events.json"
         path.write_text(json.dumps([{
@@ -93,6 +106,106 @@ class VibeStateTests(unittest.TestCase):
         self.init()
         second = self.init()
         self.assertEqual("already_initialized", second["result"])
+
+    def test_sentence_edit_uses_fast_path_and_renders_full_draft(self):
+        pr = self.create_draft_pr()
+        revised = self.root / "revised.md"
+        revised.write_text("第一句已修改。第二句保留。", encoding="utf-8")
+        result = self.run_cli("revise-pr", "--pr", pr["id"], "--body-file", str(revised))
+        self.assertEqual("DRAFT_FAST_PATH", result["edit_path"])
+        self.assertFalse(result["scan_performed"])
+        self.assertEqual("第一句已修改。第二句保留。", result["full_draft"]["body"])
+        self.assertEqual("原始标题", result["full_draft"]["title"])
+        self.assertEqual("DRAFT", result["full_draft"]["status"])
+        self.assertEqual("DRAFT", result["current_state"])
+        self.assertEqual("PULL", result["action"])
+        self.assertIn("提交以上修改（Pull）", result["next"])
+
+    def test_title_edit_uses_fast_path_without_rescanning(self):
+        pr = self.create_draft_pr()
+        result = self.run_cli("revise-pr", "--pr", pr["id"], "--title", "更短的新标题")
+        self.assertEqual("DRAFT_FAST_PATH", result["edit_path"])
+        self.assertFalse(result["scan_performed"])
+        self.assertEqual("更短的新标题", result["full_draft"]["title"])
+        self.assertEqual("第一句原稿。第二句保留。", result["full_draft"]["body"])
+        self.assertEqual("PULL", result["action"])
+
+    def test_factual_number_change_requires_evidence(self):
+        pr = self.create_draft_pr("从 18 次降到 11 次。")
+        revised = self.root / "factual-revised.md"
+        revised.write_text("从 18 次降到 20 次。", encoding="utf-8")
+        error = self.run_cli(
+            "revise-pr", "--pr", pr["id"], "--body-file", str(revised), expect=2,
+        )
+        self.assertIn("需要重新核实证据", error["error"])
+        stored = json.loads((self.root / ".vibesocial" / "social-prs" / f"{pr['id']}.json").read_text(encoding="utf-8"))
+        self.assertEqual("从 18 次降到 11 次。", stored["body"])
+
+    def test_factual_edit_with_evidence_uses_fact_check_path(self):
+        pr = self.create_draft_pr("从 18 次降到 11 次。")
+        revised = self.root / "factual-revised.md"
+        revised.write_text("从 18 次降到 20 次。", encoding="utf-8")
+        evidence = self.root / "evidence.md"
+        evidence.write_text("验证记录：新的结果为 20 次。", encoding="utf-8")
+        result = self.run_cli(
+            "revise-pr", "--pr", pr["id"], "--body-file", str(revised),
+            "--evidence-file", str(evidence),
+        )
+        self.assertEqual("FACT_CHECK", result["edit_path"])
+        self.assertTrue(result["evidence_checked"])
+        self.assertEqual("从 18 次降到 20 次。", result["full_draft"]["body"])
+        self.assertEqual("DRAFT", result["current_state"])
+
+    def test_unsupported_factual_evidence_does_not_save_edit(self):
+        pr = self.create_draft_pr("从 18 次降到 11 次。")
+        revised = self.root / "factual-revised.md"
+        revised.write_text("从 18 次降到 20 次。", encoding="utf-8")
+        evidence = self.root / "unsupported-evidence.md"
+        evidence.write_text("验证记录仍然只有旧结果。", encoding="utf-8")
+        error = self.run_cli(
+            "revise-pr", "--pr", pr["id"], "--body-file", str(revised),
+            "--evidence-file", str(evidence), expect=2,
+        )
+        self.assertIn("evidence 不支持", error["error"])
+        stored = json.loads((self.root / ".vibesocial" / "social-prs" / f"{pr['id']}.json").read_text(encoding="utf-8"))
+        self.assertEqual("从 18 次降到 11 次。", stored["body"])
+
+    def test_draft_edit_auto_finds_one_draft_and_replaces_title_and_body(self):
+        self.create_draft_pr(
+            "开发日志 01\n\n1.0.0 已经可以完成模板导入和使用，不必先理解 .tsav 的内部结构",
+            "开发日志 01",
+        )
+        result = self.run_cli(
+            "draft-edit", "--replace-old", "开发日志 01", "--replace-new", "开发记录 01",
+        )
+        self.assertEqual("draft-edit", result["command"])
+        self.assertEqual("spr-0001", result["id"])
+        self.assertEqual(2, result["revision"])
+        self.assertEqual("开发记录 01", result["full_draft"]["title"])
+        self.assertIn("开发记录 01", result["full_draft"]["body"])
+        self.assertEqual("DRAFT", result["full_draft"]["status"])
+        self.assertEqual("DRAFT", result["current_state"])
+        self.assertEqual("PULL", result["action"])
+        self.assertEqual("SOCIAL_PR", result["status"])
+        self.assertIn("提交以上修改（Pull）", result["next"])
+
+        stored = json.loads((self.root / ".vibesocial" / "social-prs" / "spr-0001.json").read_text(encoding="utf-8"))
+        self.assertEqual(1, len(stored["revisions"]))
+        self.assertEqual(2, stored["revision"])
+
+    def test_draft_edit_rejects_multiple_current_drafts(self):
+        first = self.create_draft_pr()
+        body = self.root / "second-draft.md"
+        body.write_text("第二份草稿。", encoding="utf-8")
+        self.run_cli(
+            "create-pr", "--commit", "sc-0001", "--title", "第二份标题",
+            "--direction", "Draft editing", "--body-file", str(body),
+        )
+        error = self.run_cli(
+            "draft-edit", "--replace-old", "第一句原稿。", "--replace-new", "第一句修改。", expect=2,
+        )
+        self.assertIn("exactly one current DRAFT", error["error"])
+        self.assertEqual("spr-0001", first["id"])
 
     def test_ready_candidate_can_create_social_commit(self):
         self.init()

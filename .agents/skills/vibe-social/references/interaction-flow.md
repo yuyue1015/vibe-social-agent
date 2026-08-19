@@ -58,18 +58,48 @@
 
 ## 提交修改（Pull 动作）
 
+普通 DRAFT 修改只能使用 `vibe_state.py draft-edit`。Agent 不需要查找 `spr` ID、读取源码、调用 `--help`、创建 feedback 文件或手动同步标题和正文。只调用一次命令：
+
 ```text
-当前状态：草稿修改已提交，仍处于草稿审核流程（DRAFT）。
-
-已完成：已通过 Pull 动作提交你刚刚提出的自然语言修改。
-
-下一步：
-[1] 审核通过并存入草稿箱（Approve）
-[2] 继续修改 + 输入修改内容
-[3] 放弃本稿
+python .agents/skills/vibe-social/scripts/vibe_state.py \
+  --root <project-root> \
+  draft-edit \
+  --replace-old "<old>" \
+  --replace-new "<new>"
 ```
 
-Pull 是用户动作，不是持久化状态。修改后的 Social PR 仍保存为 `SOCIAL_PR`；任何 JSON 的 `status` 都不能写入 `PULL`。
+`draft-edit` 会自动找到唯一当前 DRAFT，读取完整 `title`/`body`，执行精确替换；如果替换文本同时出现在标题和正文标题行，会同步更新两处。成功后只允许消费返回 JSON 的：
+
+```text
+full_draft.title
+full_draft.body
+current_state
+next
+```
+
+普通编辑只能调用一次 `draft-edit`；禁止调用 `revise-pr`、`--help`、扫描、Story、Ranking 或 Publish Readiness。禁止只展示修改句、diff、修改摘要或“其他内容未修改”，也不得省略 `next` 菜单。
+
+```text
+已修改，当前完整草稿：
+
+【完整标题】
+
+完整正文……
+
+当前状态：DRAFT
+
+[1] 提交以上修改（Pull）
+[2] 继续修改
+[3] 放弃这些修改
+```
+
+普通措辞编辑走轻量路径：读取当前 DRAFT → 应用标题或正文修改 → 保存 revision → 展示完整草稿。此路径不重新执行项目扫描、Git 扫描、Story Detect、Story Ranking、Publish Readiness 或全量事实检索。
+
+普通编辑不得调用 `scan_guard.py`、`story_detect.py`、`story_generate.py`、`story_aggregate.py`、`performance.py`，也不得重新执行 Story Ranking、Publish Readiness 或项目/Git 全量扫描。
+
+只有用户明确要求核实事实、重新扫描、查源码，或修改导致正文中的数字发生变化时，才进入事实核验路径；没有证据前不得直接保存该事实修改。
+
+Pull 是用户动作，不是持久化状态。修改后的 Social PR 仍保存为 `SOCIAL_PR`；任何 JSON 的 `status` 都不能写入 `PULL`。选择 `[2] 继续修改` 后立即收集下一条自然语言修改意见，并再次使用同一条 `draft-edit` 路径。
 
 ## 审核通过（APPROVED）
 

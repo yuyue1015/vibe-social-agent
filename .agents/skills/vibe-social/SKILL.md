@@ -13,6 +13,9 @@ VibeSocial discovers public-safe material from a local software project, turns s
 - `APPROVED` is not `PUBLISHED`. Approval never publishes.
 - An `APPROVED` version is immutable. To change it, run `vibe_state.py create-revision`; revise the new Social PR instead.
 - `PULL` is a user action that submits the current edit, not a persisted JSON status.
+- When the current PR is `DRAFT`, ordinary wording edits have **LOW freedom** and one deterministic route: call `vibe_state.py draft-edit` exactly once with `--replace-old` and `--replace-new`. `draft-edit` finds the only current DRAFT, reads the complete `title`/`body`, applies the exact replacement, writes one revision, and returns the complete draft. Consume `full_draft.title`, `full_draft.body`, `current_state`, and `next` directly; do not choose another implementation.
+- Ordinary DRAFT edits include changing one sentence, changing the title, deleting one sentence, shortening, or adjusting tone/wording. They must not call `revise-pr`, `--help`, `scan_guard.py`, `story_detect.py`, `story_generate.py`, `story_aggregate.py`, `performance.py`, Story Ranking, Publish Readiness, or any project/Git full scan.
+- A changed number or explicit fact-verification request requires evidence before the edit is saved; one wording edit must not trigger Writing Memory rescan or global learning.
 - Do not modify business code, invent facts, hand-edit generated JSON, or call Weibo write commands from this Skill.
 - Before any Git or project scan, use `scan_guard.py preflight` and the user-approved root/scope. Read the privacy policy before inspecting project material.
 
@@ -27,7 +30,8 @@ Load only the references required for the current action; do not load the comple
 | Choose a Story | [development-story.md](references/development-story.md), [story-ranking.md](references/story-ranking.md), [story-journey.md](references/story-journey.md) |
 | Story aggregation | [story-aggregation.md](references/story-aggregation.md) only when several records may form a larger phase |
 | 下一篇 | `.vibesocial/series-state.md`, [series-state.md](references/series-state.md), [writing-memory.md](references/writing-memory.md), [workflow.md](references/workflow.md) |
-| Revise a draft | [interaction-flow.md](references/interaction-flow.md), [data-contracts.md](references/data-contracts.md) |
+| DRAFT Fast Edit | **No references.** For one ordinary DRAFT wording/title replacement, call `vibe_state.py draft-edit` exactly once, then render only `full_draft.title`, `full_draft.body`, `current_state`, and `next`. |
+| Other Revision / Fact Check | Read [workflow.md](references/workflow.md), [interaction-flow.md](references/interaction-flow.md), and [data-contracts.md](references/data-contracts.md) only when creating a revision after `APPROVED`, verifying a fact/changed number, or handling a non-ordinary edit. |
 | Approve | [interaction-flow.md](references/interaction-flow.md), [data-contracts.md](references/data-contracts.md), [writing-memory.md](references/writing-memory.md) when learning is needed |
 | create-revision | [workflow.md](references/workflow.md), [interaction-flow.md](references/interaction-flow.md), [data-contracts.md](references/data-contracts.md) |
 | Publish handoff | [weibo-publish](../weibo-publish/SKILL.md) |
@@ -38,14 +42,14 @@ Load only the references required for the current action; do not load the comple
 Use the bundled scripts for state, scanning, bounded subprocesses, and repeatable transformations. Do not recreate their logic as free-form instructions.
 
 - `scripts/scan_guard.py`: preflight, approved scan root, and resource boundary.
-- `scripts/vibe_state.py`: initialize, inspect, commit, create PR/revision, revise, approve, memory context, and safe state writes.
+- `scripts/vibe_state.py`: initialize, inspect, commit, create PR/revision, `draft-edit`, approve, memory context, and safe state writes.
 - `scripts/story_detect.py`, `story_generate.py`, `story_aggregate.py`: candidate detection, draft materialization, and optional aggregation.
 - `scripts/performance.py`: read-only CLI schema discovery, snapshots, and descriptive analysis.
 
 ## Freedom level
 
-- **LOW:** Story Detect, Approve, create-revision, Publish handoff, Reconcile, state read/write, path safety, and Performance CLI invocation.
-- **MEDIUM:** Story Ranking, Story Journey selection, Story Generate, draft wording changes, and Writing Memory semantic judgment.
+- **LOW:** DRAFT title/wording edits, Story Detect, Approve, create-revision, Publish handoff, Reconcile, state read/write, path safety, and Performance CLI invocation.
+- **MEDIUM:** Story Ranking, Story Journey selection, Story Generate, and Writing Memory semantic judgment.
 
 Keep deterministic operations in scripts. Do not turn low-freedom operations into long natural-language procedures.
 

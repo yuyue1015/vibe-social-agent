@@ -127,6 +127,65 @@ class SkillContractTests(unittest.TestCase):
             self.assertIn(phrase, weibo_text)
         self.assertNotIn("普通代码总结", vibe_text)
 
+    def test_draft_edit_is_low_freedom_and_has_one_route(self) -> None:
+        skill = (SKILL_DIRS["vibe-social"] / "SKILL.md").read_text(encoding="utf-8")
+        openai = (SKILL_DIRS["vibe-social"] / "agents" / "openai.yaml").read_text(encoding="utf-8")
+        interaction = (SKILL_DIRS["vibe-social"] / "references" / "interaction-flow.md").read_text(encoding="utf-8")
+        workflow = (SKILL_DIRS["vibe-social"] / "references" / "workflow.md").read_text(encoding="utf-8")
+
+        self.assertIn("**LOW:** DRAFT title/wording edits", skill)
+        self.assertNotIn("**MEDIUM:** Story Ranking, Story Journey selection, Story Generate, draft wording changes", skill)
+        self.assertIn("draft-edit exactly once", openai)
+        self.assertIn("or rescan the project", openai)
+        self.assertIn("draft-edit", skill)
+        fast_edit_route = next(
+            line for line in skill.splitlines() if line.startswith("| DRAFT Fast Edit |")
+        )
+        self.assertIn("**No references.**", fast_edit_route)
+        self.assertIn("draft-edit` exactly once", fast_edit_route)
+        self.assertIn("full_draft.title", fast_edit_route)
+        self.assertIn("full_draft.body", fast_edit_route)
+        self.assertIn("current_state", fast_edit_route)
+        self.assertIn("next", fast_edit_route)
+        self.assertNotIn("interaction-flow.md", fast_edit_route)
+        self.assertNotIn("data-contracts.md", fast_edit_route)
+        other_revision_route = next(
+            line for line in skill.splitlines() if line.startswith("| Other Revision / Fact Check |")
+        )
+        self.assertIn("creating a revision after `APPROVED`", other_revision_route)
+        self.assertIn("verifying a fact/changed number", other_revision_route)
+        self.assertIn("non-ordinary edit", other_revision_route)
+        self.assertIn("interaction-flow.md", other_revision_route)
+        self.assertIn("data-contracts.md", other_revision_route)
+        for forbidden in (
+            "revise-pr",
+            "--help",
+            "scan_guard.py",
+            "story_detect.py",
+            "story_generate.py",
+            "story_aggregate.py",
+            "performance.py",
+            "Story Ranking",
+            "Publish Readiness",
+        ):
+            self.assertIn(forbidden, skill)
+            self.assertIn(forbidden, interaction)
+
+        self.assertIn("vibe_state.py \\", interaction)
+        self.assertIn("draft-edit", interaction)
+        self.assertIn("--replace-old", interaction)
+        self.assertIn("--replace-new", interaction)
+        self.assertIn("full_draft.title", interaction)
+        self.assertIn("full_draft.body", interaction)
+        self.assertIn("current_state", interaction)
+        self.assertIn("next", interaction)
+        self.assertIn("【完整标题】", interaction)
+        self.assertIn("禁止只展示修改句、diff、修改摘要", interaction)
+        self.assertIn("[2] 继续修改", interaction)
+        self.assertIn("所有“继续修改”选项统一显示为“继续修改”", workflow)
+        self.assertIn("当前 DRAFT 的 `vibe_state.py draft-edit` 唯一路径", workflow)
+        self.assertNotIn("继续修改 + 输入修改内容", workflow)
+
 
 if __name__ == "__main__":
     unittest.main()

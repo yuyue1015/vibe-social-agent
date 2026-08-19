@@ -30,7 +30,7 @@ After a revised Social PR reaches `APPROVED`, the local Learn step compares `fir
 | Approve | 审核通过并存入草稿箱（Approve）：进入 APPROVED，不代表发布 |
 | Publish | 内容分发动作：可进入微博发布流程、手动发布其他平台或仅保存 |
 
-用户交互优先使用中文动作，括号保留英文语义。所有“继续修改”“返回修改”选项都必须写成“继续修改 + 输入修改内容”或“返回修改 + 输入修改内容”，选择后立即等待自然语言修改意见。`APPROVED` 版本不可原地修改；修改已批准内容必须创建新的 Social Commit 和 Social PR。
+用户交互优先使用中文动作，括号保留英文语义。所有“继续修改”选项统一显示为“继续修改”，选择后立即等待自然语言修改意见，并继续使用当前 DRAFT 的 `vibe_state.py draft-edit` 唯一路径；“返回修改”也必须立即等待自然语言修改意见。`APPROVED` 版本不可原地修改；修改已批准内容必须创建新的 Social Commit 和 Social PR。
 
 ## Initialization
 

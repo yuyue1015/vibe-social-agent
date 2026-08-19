@@ -39,6 +39,12 @@ EVENT_REQUIRED = {"type", "summary", "problem", "change", "user_value", "public_
 EVENT_ALLOWED = EVENT_REQUIRED | {"evidence"}
 PUBLISH_READINESS_STATUSES = {"ready", "hold", "skip"}
 COMPLETION_LEVELS = {"complete", "validated", "exploring", "unknown"}
+FACTUAL_EDIT_REQUEST = re.compile(
+    r"(?:事实|数字|数值|准确|核实|重新扫描|查一下源码|源码|这个事实不对|"
+    r"verify|fact|number|accurate|rescan|source code)",
+    re.IGNORECASE,
+)
+NUMBER_TOKEN = re.compile(r"(?<![\w.])\d+(?:\.\d+)?%?")
 FORBIDDEN_KEYS = re.compile(r"(?:token|secret|password|passwd|cookie|api[_-]?key|credential|private[_-]?key)", re.I)
 FORBIDDEN_TEXT = [
     re.compile(r"-----BEGIN [A-Z ]*PRIVATE KEY-----"),
@@ -785,6 +791,35 @@ def read_public_text(path_value: str, label: str) -> str:
     return text
 
 
+def draft_edit_requires_evidence(
+    previous_body: str,
+    new_body: str,
+    feedback: str | None,
+    previous_title: str = "",
+    new_title: str = "",
+) -> bool:
+    """Keep ordinary wording edits local; require evidence for factual changes."""
+    if feedback and FACTUAL_EDIT_REQUEST.search(feedback):
+        return True
+    previous_text = f"{previous_title}\n{previous_body}"
+    new_text = f"{new_title}\n{new_body}"
+    return sorted(NUMBER_TOKEN.findall(previous_text)) != sorted(NUMBER_TOKEN.findall(new_text))
+
+
+def added_edit_numbers(previous_body: str, new_body: str, previous_title: str = "", new_title: str = "") -> set[str]:
+    previous_text = f"{previous_title}\n{previous_body}"
+    new_text = f"{new_title}\n{new_body}"
+    return set(NUMBER_TOKEN.findall(new_text)) - set(NUMBER_TOKEN.findall(previous_text))
+
+
+def full_draft_view(record: dict[str, Any]) -> dict[str, str]:
+    return {
+        "title": str(record.get("title") or ""),
+        "body": str(record.get("body") or ""),
+        "status": "DRAFT",
+    }
+
+
 def cmd_create_pr(args: argparse.Namespace) -> dict[str, Any]:
     root = state_root(args.root)
     _, state = require_initialized(root)
@@ -919,14 +954,37 @@ def cmd_revise_pr(args: argparse.Namespace) -> dict[str, Any]:
     path, record = load_pr(root, args.pr)
     if record["status"] == "APPROVED":
         raise StateError("Approved Social PRs are immutable; create a new PR")
+    if args.body_file is None and args.title is None:
+        raise StateError("Provide --body-file or --title for a draft edit")
     previous_body = record["body"]
-    record["body"] = read_public_text(args.body_file, "draft body")
+    previous_title = record["title"]
+    new_body = read_public_text(args.body_file, "draft body") if args.body_file else previous_body
+    new_title = args.title.strip() if args.title is not None else previous_title
+    if not new_title:
+        raise StateError("draft title cannot be empty")
+    inspect_public(new_title, "draft title")
+    feedback = read_public_text(args.feedback_file, "feedback") if args.feedback_file else None
+    requires_evidence = draft_edit_requires_evidence(previous_body, new_body, feedback, previous_title, new_title)
+    evidence_checked = False
+    if requires_evidence:
+        if not args.evidence_file:
+            raise StateError("这个修改涉及事实数字，需要重新核实证据。请先提供 --evidence-file。")
+        evidence = read_public_text(args.evidence_file, "evidence")
+        added_numbers = added_edit_numbers(previous_body, new_body, previous_title, new_title)
+        if added_numbers and not added_numbers.issubset(set(NUMBER_TOKEN.findall(evidence))):
+            raise StateError("当前 evidence 不支持修改后的事实数字，不能保存这次修改。")
+        evidence_checked = True
+    record["title"] = new_title
+    record["body"] = new_body
     record["revision"] += 1
     record["updated_at"] = now()
     record.setdefault("revisions", []).append({
         "revision": record["revision"],
         "previous_body": previous_body,
-        "feedback": read_public_text(args.feedback_file, "feedback") if args.feedback_file else None,
+        "previous_title": previous_title,
+        "feedback": feedback,
+        "edit_path": "FACT_CHECK" if requires_evidence else "DRAFT_FAST_PATH",
+        "evidence_checked": evidence_checked,
         "updated_at": record["updated_at"],
     })
     atomic_json(path, record)
@@ -934,9 +992,65 @@ def cmd_revise_pr(args: argparse.Namespace) -> dict[str, Any]:
     output.update({
         "current_state": "DRAFT",
         "action": "PULL",
+        "edit_path": "FACT_CHECK" if requires_evidence else "DRAFT_FAST_PATH",
+        "scan_performed": False,
+        "evidence_checked": evidence_checked,
+        "full_draft": full_draft_view(record),
+        "draft_render": "已修改，当前完整草稿：",
         "completed": "已提交本轮自然语言修改，当前版本仍是草稿。",
-        "next": ["审核通过并存入草稿箱（Approve）", "继续修改 + 输入修改内容", "放弃本稿"],
+        "next": ["提交以上修改（Pull）", "继续修改", "放弃这些修改"],
     })
+    return output
+
+
+def current_draft_pr(root: Path) -> tuple[str, dict[str, Any]]:
+    drafts: list[tuple[str, dict[str, Any]]] = []
+    for path in sorted(safe_join(root, "social-prs").glob("spr-*.json")):
+        record = read_json(path)
+        if record.get("status") == "SOCIAL_PR":
+            drafts.append((record.get("id") or path.stem, record))
+    if len(drafts) != 1:
+        raise StateError(f"Expected exactly one current DRAFT Social PR; found {len(drafts)}")
+    return drafts[0]
+
+
+def cmd_draft_edit(args: argparse.Namespace) -> dict[str, Any]:
+    """Apply one exact replacement to the only current DRAFT in one command."""
+    root = state_root(args.root)
+    require_initialized(root)
+    old = args.replace_old
+    new = args.replace_new
+    if not old:
+        raise StateError("--replace-old cannot be empty")
+    pr_id, record = current_draft_pr(root)
+    title = str(record.get("title") or "")
+    body = str(record.get("body") or "")
+    if old not in title and old not in body:
+        raise StateError("Exact replacement text was not found in the current DRAFT title or body")
+
+    updated_title = title.replace(old, new)
+    updated_body = body.replace(old, new)
+    with tempfile.NamedTemporaryFile(
+        mode="w", encoding="utf-8", newline="\n", suffix=".draft.md", delete=False,
+    ) as handle:
+        handle.write(updated_body.rstrip() + "\n")
+        body_file = handle.name
+    try:
+        revise_args = argparse.Namespace(
+            root=args.root,
+            pr=pr_id,
+            body_file=body_file,
+            title=updated_title,
+            feedback_file=None,
+            evidence_file=None,
+        )
+        output = cmd_revise_pr(revise_args)
+    finally:
+        try:
+            os.unlink(body_file)
+        except FileNotFoundError:
+            pass
+    output["command"] = "draft-edit"
     return output
 
 
@@ -1071,9 +1185,15 @@ def build_parser() -> argparse.ArgumentParser:
     create_pr.set_defaults(run=cmd_create_pr)
     revise_pr = sub.add_parser("revise-pr")
     revise_pr.add_argument("--pr", required=True)
-    revise_pr.add_argument("--body-file", required=True)
+    revise_pr.add_argument("--body-file")
+    revise_pr.add_argument("--title")
     revise_pr.add_argument("--feedback-file")
+    revise_pr.add_argument("--evidence-file")
     revise_pr.set_defaults(run=cmd_revise_pr)
+    draft_edit = sub.add_parser("draft-edit")
+    draft_edit.add_argument("--replace-old", required=True)
+    draft_edit.add_argument("--replace-new", required=True)
+    draft_edit.set_defaults(run=cmd_draft_edit)
     create_revision = sub.add_parser("create-revision")
     create_revision.add_argument("--pr", required=True)
     create_revision.set_defaults(run=cmd_create_revision)

@@ -1,4 +1,4 @@
 interface:
   display_name: "VibeSocial"
   short_description: "Privacy-review progress into human-approved drafts"
-  default_prompt: "Use $vibe-social only to scan VibeSocial development progress or create, revise, approve, and hand off a VibeSocial draft."
+  default_prompt: "Use $vibe-social for VibeSocial development progress and its draft lifecycle. If an existing DRAFT needs an ordinary wording or title edit, call vibe_state.py draft-edit exactly once and consume its full_draft and next output; do not call revise-pr, --help, or rescan the project."
