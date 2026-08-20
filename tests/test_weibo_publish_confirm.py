@@ -41,9 +41,10 @@ class WeiboPublishConfirmationTests(unittest.TestCase):
             input_fn=input_fn if input_fn is not None else (lambda _prompt="": "1"), output_fn=lambda _text: None,
         )
 
-    def reconcile_args(self, weibo_id=None):
+    def reconcile_args(self, weibo_id=None, *, confirm_remote_deleted=False):
         return MODULE.argparse.Namespace(
             root=str(self.root), commit="sc-0001", cli="fake-cli", weibo_id=weibo_id,
+            confirm_remote_deleted=confirm_remote_deleted,
         )
 
     def write_publish_state(self, status, **updates):
@@ -121,7 +122,7 @@ class WeiboPublishConfirmationTests(unittest.TestCase):
                 ]}}, ensure_ascii=False), "")
             return self.fake_cli()(base, args, timeout)
 
-        with patch.object(MODULE, "confirm_preview", return_value=[]), patch.object(MODULE, "resolve_cli", return_value=["fake-cli"]), patch.object(MODULE, "run_cli", side_effect=run):
+        with patch.object(MODULE, "confirm_preview", return_value=[]), patch.object(MODULE, "resolve_cli", return_value=["fake-cli"]), patch.object(MODULE, "run_cli", side_effect=run), patch.object(MODULE, "run_cli_with_ansi_c", side_effect=run):
             MODULE.publish(self.args())
         post = next(call for call in calls if call[:2] == ["statuses", "update"])
         sent = post[post.index("--status") + 1]
@@ -273,6 +274,28 @@ class WeiboPublishConfirmationTests(unittest.TestCase):
             with self.assertRaises(MODULE.PublishError) as raised:
                 MODULE.publish(self.args())
         self.assertEqual("UNKNOWN_REQUIRES_RECONCILIATION", raised.exception.publish_status)
+        run_cli.assert_not_called()
+
+    def test_manual_remote_deletion_recovers_unknown_for_fresh_publish(self):
+        self.write_publish_state("UNKNOWN_REQUIRES_RECONCILIATION", remote_id="987654321")
+        with patch.object(MODULE, "run_cli") as run_cli:
+            recovered = MODULE.reconcile(self.reconcile_args(confirm_remote_deleted=True))
+        self.assertEqual("APPROVED", recovered["current_state"])
+        run_cli.assert_not_called()
+        record = json.loads(self.commit_path.read_text(encoding="utf-8"))
+        self.assertEqual("APPROVED", record["status"])
+        self.assertNotIn("publish", record)
+        self.assertEqual("manual_remote_deleted", record["publish_recovery"]["method"])
+        self.assertEqual("987654321", record["publish_recovery"]["previous_remote_id"])
+
+        with patch.object(MODULE, "confirm_preview", return_value=[]), patch.object(MODULE, "resolve_cli", return_value=["fake-cli"]), patch.object(MODULE, "run_cli", side_effect=self.fake_cli()):
+            result = MODULE.publish(self.args())
+        self.assertEqual("PUBLISHED", result["current_state"])
+
+    def test_manual_remote_deletion_recovery_requires_unknown(self):
+        with patch.object(MODULE, "run_cli") as run_cli:
+            with self.assertRaises(MODULE.PublishError):
+                MODULE.reconcile(self.reconcile_args(confirm_remote_deleted=True))
         run_cli.assert_not_called()
 
     def test_failed_retryable_commit_can_retry(self):
@@ -517,11 +540,69 @@ class WeiboPublishConfirmationTests(unittest.TestCase):
                 return CompletedProcess([], 0, json.dumps(schema, ensure_ascii=False), "")
             return self.fake_cli()(base, args, timeout)
 
-        with patch.object(MODULE, "confirm_preview", return_value=[]), patch.object(MODULE, "resolve_cli", return_value=["fake-cli"]), patch.object(MODULE, "run_cli", side_effect=run):
+        with patch.object(MODULE, "confirm_preview", return_value=[]), patch.object(MODULE, "resolve_cli", return_value=["fake-cli"]), patch.object(MODULE, "run_cli", side_effect=run), patch.object(MODULE, "run_cli_with_ansi_c", side_effect=run):
             MODULE.publish(self.args())
         post = next(call for call in calls if call[:2] == ["statuses", "update"])
         self.assertEqual("1", post[-1])
         self.assertEqual("--is_longtext", post[-2])
+
+    def test_long_multiline_chinese_hashtags_use_ansi_c_transport(self):
+        self.commit["final_text"] = (
+            "中文长微博标题\n\n"
+            + "第一段中文正文，用来验证完整长文本传输。" * 8
+            + "\n\n"
+            + "第二段保留真实换行与段落边界。"
+        )
+        self.commit_path.write_text(json.dumps(self.commit, ensure_ascii=False), encoding="utf-8")
+        regular_calls = []
+        ansi_calls = []
+
+        def regular(base, args, timeout=45):
+            regular_calls.append(args)
+            if args == ["commands", "show", "statuses", "update"]:
+                return CompletedProcess([], 0, json.dumps({"command": {"flags": [
+                    {"name": "status"},
+                    {"name": "mblog_statement"},
+                    {"name": "is_longtext"},
+                ]}}, ensure_ascii=False), "")
+            return self.fake_cli()(base, args, timeout)
+
+        def ansi(base, args, timeout=45):
+            ansi_calls.append(args)
+            self._last_status = args[args.index("--status") + 1]
+            return CompletedProcess([], 0, json.dumps({"id": "987654321"}), "")
+
+        with patch.object(MODULE, "confirm_preview", return_value=[]), patch.object(MODULE, "resolve_cli", return_value=["fake-cli"]), patch.object(MODULE, "run_cli", side_effect=regular), patch.object(MODULE, "run_cli_with_ansi_c", side_effect=ansi):
+            MODULE.publish(self.args())
+
+        self.assertEqual(1, len(ansi_calls))
+        post = ansi_calls[0]
+        sent = post[post.index("--status") + 1]
+        self.assertGreater(len(sent), 140)
+        self.assertIn("中文长微博标题\n\n第一段中文正文", sent)
+        self.assertIn("\n\n第二段保留真实换行", sent)
+        self.assertIn("#微博VibeLab# #VibeCoding#", sent)
+        self.assertEqual("1", post[-1])
+        self.assertEqual("--is_longtext", post[-2])
+        self.assertFalse(any(call[:2] == ["statuses", "update"] for call in regular_calls))
+
+    def test_ansi_c_transport_uses_bash_list_form_without_shell_true(self):
+        with patch.object(MODULE, "resolve_bash", return_value="bash"), patch.object(MODULE, "bounded_subprocess") as bounded:
+            MODULE.run_cli_with_ansi_c(
+                ["weibo-cli"],
+                ["statuses", "update", "--status", "中文第一段\n中文第二段", "--mblog_statement", "1"],
+            )
+
+        command = bounded.call_args.args[0]
+        self.assertEqual(["bash", "-lc"], command[:2])
+        self.assertIn("$'中文第一段\\n中文第二段'", command[2])
+        source = SCRIPT.read_text(encoding="utf-8")
+        self.assertNotIn("shell=True", source)
+        self.assertNotIn("os.system", source)
+
+    def test_ansi_c_quote_preserves_newlines_quotes_and_backslashes(self):
+        quoted = MODULE.ansi_c_quote("第一行\n第二行'\\路径")
+        self.assertEqual("$'第一行\\n第二行\\'\\\\路径'", quoted)
 
     def test_one_image_uploads_first_then_posts_with_pic_id(self):
         image = self.root / "one.png"

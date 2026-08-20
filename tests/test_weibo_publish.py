@@ -63,18 +63,20 @@ class WeiboPublishTests(unittest.TestCase):
         self.assertIn("微博账号：✓ 已登录", report)
         self.assertIn("CLI环境：✓ 可用", report)
         self.assertIn("开发者服务：⚠ 未检测", report)
+        self.assertIn("Windows PowerShell 不支持手工执行", report)
 
     def test_credential_visibility_error_does_not_claim_logout(self):
         result = CompletedProcess([], 1, "auth login 已成功\n", "无法读取 Windows 用户凭据存储")
         outputs = []
         with patch.object(MODULE, "run_cli", return_value=result):
-            report = MODULE.doctor(["fake-cli"], output_fn=outputs.append)
+            with self.assertRaises(MODULE.PublishError):
+                MODULE.doctor(["fake-cli"], output_fn=outputs.append)
         message = "\n".join(outputs)
         self.assertIn("微博账号：⚠ 无法确认", message)
         self.assertIn("无法读取微博授权状态", message)
         self.assertIn("同一用户终端", message)
         self.assertNotIn("未登录微博账号", message)
-        self.assertIn("⚠ 无法确认", report)
+        self.assertNotIn("[1] 登录微博账号", message)
 
     def test_explicitly_not_logged_in_gets_login_entry(self):
         result = CompletedProcess([], 0, "未检测到授权", "")
@@ -90,11 +92,64 @@ class WeiboPublishTests(unittest.TestCase):
         result = CompletedProcess([], 1, "", "Access is denied while reading credential store")
         outputs = []
         with patch.object(MODULE, "run_cli", return_value=result):
-            MODULE.doctor(["fake-cli"], output_fn=outputs.append)
+            with self.assertRaises(MODULE.PublishError):
+                MODULE.doctor(["fake-cli"], output_fn=outputs.append)
         message = "\n".join(outputs)
         self.assertIn("微博账号：⚠ 无法确认", message)
         self.assertIn("CLI环境：⚠ 不可访问", message)
         self.assertNotIn("未检测到微博授权", message)
+
+    def test_doctor_login_failure_with_unreadable_whoami_is_environment_problem(self):
+        doctor = CompletedProcess([], 0, "× 登录账号\n× 完成开发者认证\n× 开通服务", "")
+        whoami = CompletedProcess([], 1, "", "Access is denied while reading credential store")
+        with patch.object(MODULE, "run_cli", side_effect=[doctor, whoami]):
+            with self.assertRaises(MODULE.PublishError) as raised:
+                MODULE.doctor(["fake-cli"])
+        message = str(raised.exception)
+        self.assertIn("无法访问微博 CLI 登录凭据", message)
+        self.assertNotIn("[1] 登录微博账号", message)
+
+    def test_doctor_login_failure_with_active_whoami_is_service_problem(self):
+        doctor = CompletedProcess([], 0, "× 登录账号\n× 完成开发者认证\n× 开通服务", "")
+        whoami = CompletedProcess([], 0, json.dumps({
+            "user": {"id": "5700896082", "username": "demo"},
+            "token": {"id": "1141", "is_active": True},
+            "service_status": {"kind": "formal_active"},
+        }), "")
+        with patch.object(MODULE, "run_cli", side_effect=[doctor, whoami]):
+            with self.assertRaises(MODULE.PublishError) as raised:
+                MODULE.doctor(["fake-cli"])
+        message = str(raised.exception)
+        self.assertIn("doctor 与 auth whoami 返回不一致", message)
+        self.assertNotIn("[1] 登录微博账号", message)
+
+    def test_doctor_login_failure_with_unauthenticated_whoami_prompts_login(self):
+        doctor = CompletedProcess([], 0, "× 登录账号", "")
+        whoami = CompletedProcess([], 1, "未检测到授权", "")
+        with patch.object(MODULE, "run_cli", side_effect=[doctor, whoami]):
+            with self.assertRaises(MODULE.PublishError) as raised:
+                MODULE.doctor(["fake-cli"])
+        self.assertIn("[1] 登录微博账号", str(raised.exception))
+
+    def test_doctor_login_failure_with_inactive_whoami_token_prompts_login(self):
+        doctor = CompletedProcess([], 0, "× 登录账号", "")
+        whoami = CompletedProcess([], 0, json.dumps({
+            "user": {"id": "5700896082"}, "token": {"is_active": False},
+        }), "")
+        with patch.object(MODULE, "run_cli", side_effect=[doctor, whoami]):
+            with self.assertRaises(MODULE.PublishError) as raised:
+                MODULE.doctor(["fake-cli"])
+        self.assertIn("[1] 登录微博账号", str(raised.exception))
+
+    def test_doctor_login_failure_with_invalid_whoami_is_cli_problem(self):
+        doctor = CompletedProcess([], 0, "× 登录账号", "")
+        whoami = CompletedProcess([], 2, "", "unexpected CLI failure")
+        with patch.object(MODULE, "run_cli", side_effect=[doctor, whoami]):
+            with self.assertRaises(MODULE.PublishError) as raised:
+                MODULE.doctor(["fake-cli"])
+        message = str(raised.exception)
+        self.assertIn("无法通过 weibo-cli auth whoami 确认认证状态", message)
+        self.assertNotIn("[1] 登录微博账号", message)
 
     def test_success_writes_published_record_from_live_schema(self):
         posted_status = None

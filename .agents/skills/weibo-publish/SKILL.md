@@ -25,12 +25,14 @@ The publish operation has four persisted outcomes:
 - `PUBLISHED`: remote text was verified and local state was committed; never publish this version again.
 - `FAILED_RETRYABLE`: the final remote write was confirmed not to have run; the user may return to the final preview.
 - `PUBLISHING`: a write attempt is in progress or was interrupted; reconcile before retrying.
-- `UNKNOWN_REQUIRES_RECONCILIATION`: the remote result is ambiguous; never blind-retry.
+- `UNKNOWN_REQUIRES_RECONCILIATION`: the remote result is ambiguous; never blind-retry. Reconcile it first.
 
 After a remote success, the adapter records the remote ID, verifies the complete transport text, writes the Social Commit as `PUBLISHED`, and then idempotently repairs or appends the published log. A missing or failed readback remains unknown.
 
 ## Reconcile
 
-Reconcile is read-only. It may read the remote post, verify the complete text, repair local state, and complete an idempotent published-log entry. It must never call `statuses update`, `statuses upload_url_text`, or any other external write. Existing `remote_id` is preferred; otherwise require the user-provided Weibo ID. An inconclusive readback stays `UNKNOWN_REQUIRES_RECONCILIATION`.
+Reconcile never calls `statuses update`, `statuses upload_url_text`, or any other external write. It may read the remote post, verify the complete text, repair local state, and complete an idempotent published-log entry. Existing `remote_id` is preferred; otherwise require the user-provided Weibo ID. A verified match becomes `PUBLISHED`; an inconclusive readback stays `UNKNOWN_REQUIRES_RECONCILIATION`.
 
-CLI schema details, quoting rules, doctor diagnostics, command parameters, and JSON examples belong to the adapter and its tests, not to this always-loaded contract. Do not modify application code, Story logic, Writing Memory, scan boundaries, or the approved draft text here.
+Only when the user has independently confirmed that the ambiguous remote post was deleted may the adapter run `reconcile --confirm-remote-deleted`. This records that explicit local confirmation, restores the still-approved commit to `APPROVED`, and permits a fresh, separately confirmed publish attempt. It must not infer deletion from a missing readback.
+
+For Windows shell behavior and long-text ANSI-C transport diagnostics, see [references/windows-bash-environment.md](references/windows-bash-environment.md). CLI schema details, quoting rules, doctor diagnostics, command parameters, and JSON examples belong to the adapter and its tests, not to this always-loaded contract. Do not modify application code, Story logic, Writing Memory, scan boundaries, or the approved draft text here.

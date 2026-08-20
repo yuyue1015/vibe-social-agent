@@ -93,6 +93,49 @@ def run_cli(base: list[str], args: list[str], timeout: int = WEIBO_SUBPROCESS_TI
     return bounded_subprocess([*base, *args], timeout=timeout)
 
 
+def resolve_bash() -> str:
+    """Return an explicit Bash executable for the verified ANSI-C transport path."""
+    candidates = [
+        shutil.which("bash"),
+        r"C:\Program Files\Git\bin\bash.exe",
+        r"C:\Program Files\Git\usr\bin\bash.exe",
+    ]
+    for candidate in candidates:
+        if candidate and Path(candidate).is_file():
+            return candidate
+    raise PublishError("未找到 Bash/Git Bash，无法使用 ANSI-C quoting 传递长微博正文")
+
+
+def ansi_c_quote(value: str) -> str:
+    """Quote one argument for Bash ANSI-C syntax without invoking a Windows shell."""
+    escaped: list[str] = []
+    for char in value:
+        codepoint = ord(char)
+        if char == "\\":
+            escaped.append("\\\\")
+        elif char == "'":
+            escaped.append("\\'")
+        elif char == "\n":
+            escaped.append("\\n")
+        elif char == "\r":
+            escaped.append("\\r")
+        elif char == "\t":
+            escaped.append("\\t")
+        elif codepoint < 0x20 or codepoint == 0x7F:
+            escaped.append(f"\\x{codepoint:02x}")
+        else:
+            escaped.append(char)
+    return "$'" + "".join(escaped) + "'"
+
+
+def run_cli_with_ansi_c(base: list[str], args: list[str], timeout: int = WEIBO_SUBPROCESS_TIMEOUT) -> Any:
+    """Send a verified long-text write through Bash while retaining bounded execution."""
+    if not base:
+        raise PublishError("weibo-cli command is empty")
+    command = " ".join(ansi_c_quote(item) for item in [*base, *args])
+    return bounded_subprocess([resolve_bash(), "-lc", command], timeout=timeout)
+
+
 def cli_error(result: subprocess.CompletedProcess[str], label: str) -> str:
     detail = (result.stderr or result.stdout or "").strip().splitlines()
     suffix = detail[0][:240] if detail else f"exit code {result.returncode}"
@@ -212,6 +255,10 @@ FAILED_RETRYABLE = "FAILED_RETRYABLE"
 UNKNOWN_REQUIRES_RECONCILIATION = "UNKNOWN_REQUIRES_RECONCILIATION"
 NONE = "NONE"
 REMOTE_WRITE_PHASES = {"remote_write", "readback", "local_finalize"}
+TRANSPORT_ENVIRONMENT_HINT = (
+    "长文本传输提示：适配器会自动使用 Git Bash 的 ANSI-C quoting；"
+    "Windows PowerShell 不支持手工执行 $'…' 形式，请勿据此判断发布或认证失败。"
+)
 
 
 def validate_image_paths(paths: list[Path]) -> list[Path]:
@@ -441,6 +488,36 @@ def credential_unavailable(text: str) -> bool:
     ))
 
 
+def explicit_not_logged_in(text: str) -> bool:
+    return any(marker in text for marker in (
+        "× 登录", "✗ 登录", "未登录", "未检测到授权", "登录失败", "login failed", "not logged",
+    ))
+
+
+def auth_whoami_state(base: list[str]) -> tuple[str, str]:
+    """Classify credential visibility through the CLI's machine-readable identity command.
+
+    This does not read, copy, or persist a token. It only distinguishes a
+    readable active identity from an unavailable credential store, an explicit
+    logged-out response, and an otherwise invalid CLI response.
+    """
+    result = run_cli(base, ["auth", "whoami"])
+    raw = result.stdout + "\n" + result.stderr
+    if credential_unavailable(raw):
+        return "credential_unavailable", cli_error(result, "weibo-cli auth whoami")
+    payload = cli_payload(result)
+    if result.returncode == 0 and isinstance(payload, dict):
+        user = payload.get("user")
+        token = payload.get("token")
+        if isinstance(user, dict) and user.get("id") and isinstance(token, dict) and token.get("is_active") is True:
+            return "authenticated", ""
+        if isinstance(token, dict) and token.get("is_active") is False:
+            return "not_logged_in", "weibo-cli auth whoami: token is inactive"
+    if explicit_not_logged_in(raw):
+        return "not_logged_in", cli_error(result, "weibo-cli auth whoami")
+    return "cli_error", cli_error(result, "weibo-cli auth whoami")
+
+
 def doctor_report(text: str, returncode: int = 0, credential_state: str | None = None) -> str:
     clean = strip_ansi(text)
     lines = [line.strip() for line in clean.splitlines() if line.strip()]
@@ -465,6 +542,7 @@ def doctor_report(text: str, returncode: int = 0, credential_state: str | None =
         f"微博账号：{account}",
         f"CLI环境：{cli}",
         f"开发者服务：{platform if platform_line else service}",
+        TRANSPORT_ENVIRONMENT_HINT,
     ])
 
 
@@ -486,17 +564,41 @@ def doctor(base: list[str], output_fn: Any = None) -> str:
         )
         if output_fn is not None:
             output_fn(message)
-        return report
+        raise PublishError(message)
     report = doctor_report(raw, result.returncode)
-    explicit_account_failure = any(marker in raw for marker in ("× 登录", "✗ 登录", "未登录", "未检测到授权", "登录失败", "login failed", "not logged"))
+    explicit_account_failure = explicit_not_logged_in(raw)
     if explicit_account_failure:
+        auth_state, auth_detail = auth_whoami_state(base)
+        if auth_state == "credential_unavailable":
+            raise PublishError(
+                f"{report}\n\n"
+                "当前运行环境无法访问微博 CLI 登录凭据，无法确认授权状态。\n\n"
+                "请确认发布命令与完成 auth login 的用户环境一致；不要仅因本提示重复登录。\n\n"
+                "下一步：\n[1] 在同一用户环境重新检查\n[2] 返回\n\n"
+                f"{auth_detail}"
+            )
+        if auth_state == "authenticated":
+            raise PublishError(
+                f"{report}\n\n"
+                "微博 CLI 的 doctor 与 auth whoami 返回不一致：当前环境可读取有效身份，"
+                "但服务准备检查失败。已停止发布；这不是“请重新登录”的结论。\n\n"
+                "下一步：\n[1] 重新检查 CLI/服务环境\n[2] 返回\n\n"
+                f"{cli_error(result, 'weibo-cli doctor')}"
+            )
+        if auth_state == "cli_error":
+            raise PublishError(
+                f"{report}\n\n"
+                "无法通过 weibo-cli auth whoami 确认认证状态，已停止发布。\n\n"
+                "下一步：\n[1] 重新检查 CLI 环境\n[2] 返回\n\n"
+                f"{auth_detail}"
+            )
         raise PublishError(
             f"{report}\n\n"
             "未检测到微博授权。\n\n"
             "下一步：\n"
             "[1] 登录微博账号\n"
             "[2] 返回\n\n"
-            f"{cli_error(result, 'weibo-cli doctor') if result.returncode != 0 else '请先完成 auth login。'}"
+            f"{auth_detail or (cli_error(result, 'weibo-cli doctor') if result.returncode != 0 else '请先完成 auth login。')}"
         )
     if result.returncode != 0:
         raise PublishError(
@@ -950,7 +1052,11 @@ def publish(args: argparse.Namespace) -> dict[str, Any]:
             pic_ids=pic_ids,
         )
         final_write_started = True
-        result = run_cli(base, publish_args)
+        result = (
+            run_cli_with_ansi_c(base, publish_args)
+            if len(status) > 140
+            else run_cli(base, publish_args)
+        )
         if result.returncode != 0:
             raise PublishError(cli_error(result, "weibo-cli publish failed"))
         weibo_id = extract_weibo_id(cli_payload(result))
@@ -1031,6 +1137,34 @@ def reconcile(args: argparse.Namespace) -> dict[str, Any]:
     root = validate_scan_root(args.root)
     path, commit = read_commit(root, args.commit)
     current_state = get_publish_status(commit)
+    if getattr(args, "confirm_remote_deleted", False):
+        if current_state != UNKNOWN_REQUIRES_RECONCILIATION:
+            raise PublishError(
+                "只有 UNKNOWN_REQUIRES_RECONCILIATION 可以按人工确认远端已删除恢复。",
+                publish_status=current_state,
+            )
+        if commit.get("status") != "APPROVED":
+            raise PublishError("只有 APPROVED Social Commit 可以恢复为可重新发布状态。")
+        publish = commit.get("publish") if isinstance(commit.get("publish"), dict) else {}
+        commit["publish_recovery"] = {
+            "method": "manual_remote_deleted",
+            "previous_status": UNKNOWN_REQUIRES_RECONCILIATION,
+            "previous_attempt_id": publish.get("attempt_id"),
+            "previous_remote_id": publish.get("remote_id"),
+            "confirmed_at": now(),
+        }
+        # The user has explicitly confirmed that the prior remote post was deleted.
+        # Remove only the active publish lock so the next publish creates a fresh attempt.
+        commit.pop("publish", None)
+        commit.pop("publish_error", None)
+        vibe_state.atomic_json(path, commit)
+        return {
+            "result": "recovered_for_retry",
+            "commit": commit["id"],
+            "current_state": "APPROVED",
+            "completed": "已按人工确认记录远端微博已删除；恢复为可重新发布的 APPROVED，未执行外部写入。",
+            "next": ["重新进入发布预览", "返回修改", "仅保存并暂停"],
+        }
     if current_state == PUBLISHED:
         publish = commit.get("publish") if isinstance(commit.get("publish"), dict) else {}
         log_warning = None
@@ -1164,6 +1298,7 @@ def build_parser() -> argparse.ArgumentParser:
     reconcile_parser = sub.add_parser("reconcile", help=argparse.SUPPRESS)
     reconcile_parser.add_argument("commit")
     reconcile_parser.add_argument("--weibo-id")
+    reconcile_parser.add_argument("--confirm-remote-deleted", action="store_true", help=argparse.SUPPRESS)
     reconcile_parser.add_argument("--root", default=".")
     reconcile_parser.add_argument("--cli", default="weibo-cli", help=argparse.SUPPRESS)
     reconcile_parser.set_defaults(run=reconcile)
